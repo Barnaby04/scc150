@@ -1,0 +1,96 @@
+.data
+res: .word 0
+num: .word 10, 12
+result_s: .asciiz "The result is: "
+error_s: .asciiz "Multiplication Error"
+
+
+.text
+
+j main #jump to main function
+
+#$a0 has address of the table where a and b are multiplied
+#$v0 this register returns if the multiplication occured correctly
+mult:
+lw $t0, ($a0) #loading t0, as a first namber from the table
+lw $t1, 4($a0) #loading t1, as a second number hence moved by 4 bytes
+
+li $t4 ,0 # information about the multiplication sign 0 for positive, 2-positive, 1-negative
+
+bgt $t0, 0x00007fff, mult_ret_err
+bgt $t1, 0x00007fff, mult_ret_err
+blt $t0,-32768,mult_ret_err
+blt $t1,-32768,mult_ret_err
+
+#negative always has the last bit (31) it set to 1, I check it here
+move $t3, $t0 #copying a to t3
+andi $t3, 0x80000000 #clearing all the bits beside the last one numbered 31
+beq $t3, $zero, a_plus #if number is positive jump to a_plus
+#if negative, changing it to positive by substracting it from 0
+sub $t0, $zero, $t0
+addi $t4, $t4, 1 # marking that the number is negative by adding 1 to t4
+a_plus:
+move $t3, $t1 # b to t3
+andi $t3, 0x80000000 #clearing all the bits beside the last one numbered 31
+beq $t3, $zero, b_plus #if number is positive jump to b_plus
+#if negative, changing it to positive by substracting it from 0
+sub $t1, $zero, $t1
+addi $t4, $t4, 1 #marking that the number is negative by adding 1 to t4
+# if both numbers are negative (t4=2) the first bit is equal to 0 hence the multipliaction is positive
+
+b_plus:
+
+li $t2, 0 #summing the result- equal to 0 in the beginning 
+mult0:
+#checking if the number is odd
+move $t3, $t0
+andi $t3, 1
+beq $t3, $zero, mult1 #if the number is even, jump to mult1
+#if odd add the column to the result
+add $t2, $t2, $t1
+
+mult1:
+beq $t0, $zero, mult_ret #checking if a is equal to 0, if so end of the program 
+#if differnet than 0 then multiplying a and dividing b
+srl $t0, $t0, 1 #shifting a
+sll $t1, $t1, 1 #shifting b
+j mult0
+
+mult_ret:
+
+bne $t4, 1, mult_ret0 #setting the sign if the multiplication if it is supposed to be negative
+sub $t2, $zero, $t2 #changing the sign if condition is met
+#store result in array using address in $a0 
+mult_ret0:
+sw $t2, ($a0)
+#return either 0 or 1 in $v0 depending on successful must
+mult_ret_ok:
+li $v0, 1
+jr $ra
+mult_ret_err:
+li $v0, 0
+jr $ra
+#put address of array num in $a0 
+#call mult function 
+main:
+la $a0, num
+jal mult
+# print result of mult or error depending on $v0 
+beq $v0, 1, res_ok
+li  $v0, 4    
+la $a0, error_s  
+syscall
+j _end0
+
+res_ok:
+
+li  $v0, 4    
+la $a0, result_s  
+syscall
+#displaying result
+li  $v0, 1    
+la $t0, num
+lw $a0, ($t0)  
+syscall
+
+_end0:
